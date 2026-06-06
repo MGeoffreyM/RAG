@@ -1,23 +1,40 @@
 from pathlib import Path
-from pydantic import BaseModel, Field
+from typing import Any
+from pydantic import BaseModel, model_validator
+from langchain_text_splitters import RecursiveCharacterTextSplitter, RecursiveJsonSplitter
+from langchain_text_splitters import MarkdownTextSplitter, PythonCodeTextSplitter
 from .tools import MinimalSource
 
 
-def code_chunking(content:str) -> MinimalSource:
-    while len(content > 0):
+class Chunker(BaseModel):
+    data_base: Path
+    data_list: list[Path] = []
+    data_list_md: list[Path] = []
+    data_list_py: list[Path] = []
+    data_list_json: list[Path] = []
 
+    @model_validator(mode='after')
+    def parsing_database(self) -> 'Chunker':
+        for elem in self.data_base.rglob('*'):
+            if elem.suffix == '.md':
+                self.data_list_md.append(elem)
+            elif elem.suffix == '.py':
+                self.data_list_py.append(elem)
+            elif elem.suffix == '.json':
+                self.data_list_json.append(elem)
+            else:
+                self.data_list.append(elem)
+        for elem in self.data_list:
+            print(elem)
+        return self
 
-
-def chunking(file:str) -> MinimalSource | None:
-    try:
-        with open(file, 'r', encoding='utf-8') as f:
-            pat = Path(file)
-            content = f.read()
-            if len(content) == 0:
-                return
-            elif 0 < len(content) <= 2000:
-                return MinimalSource(file_path=Path(file).resolve(),
-                                     first_character_index=0,
-                                     last_character_index=len(content) - 1)
-            elif len(content) > 2000 and pat.suffix == '.py':
+    def chunking(self) -> list[MinimalSource]:
+        list_chunkers: list[MinimalSource] = []
+        try:
+            for elem in self.data_list_md:
                 
+
+
+
+if __name__ == '__main__':
+    ch = Chunker(data_base=Path('/home/gematura/cursus_42/tronc_commum/rag/data/vllm-0.10.1/'))
