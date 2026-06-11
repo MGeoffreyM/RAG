@@ -1,13 +1,13 @@
-from pathlib import Path
-from langchain_community.document_loaders import TextLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter, Language
+import os
+from dotenv import load_dotenv
+from google import genai
 
+load_dotenv()
 
-dossier = Path('/home/gematura/cursus_42/tronc_commum/rag/'
-               'data/vllm-0.10.1')
+client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
 
-
-if __name__ == '__main__':
-    test = [elem for elem in dossier.rglob('*.py')]
-    for eleme in test:
-        print(eleme)
+print("=== Modèles Gemini disponibles pour votre clé ===")
+for m in client.models.list():
+    # Filtre pour ne voir que les modèles Gemini récents
+    if "gemini" in m.name:
+        print(f"- {m.name}")

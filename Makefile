@@ -30,6 +30,7 @@ clean:
 fclean: clean
 	@printf "$(BLUE)Suppression de l'environnement virtuel...$(RESET)\n"
 	rm -rf .venv
+	rm -rf /home/gematura/goinfre/mes_venvs/rag_venv
 
 lint:
 	@printf '$(BLUE)Lancement de flake8...$(RESET)\n'
