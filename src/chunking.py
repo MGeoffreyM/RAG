@@ -7,10 +7,12 @@ from typing import Any
 import magic
 from tqdm import tqdm
 from pydantic import BaseModel, model_validator
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage
+from langchain_community.document_loaders.generic import GenericLoader
+from langchain_community.document_loaders.parsers.txt import TextParser
+from langchain_text_splitters import RecursiveCharacterTextSplitter, Language
 from langchain_core.documents import Document
-# from langchain_community.document_loaders.parsers import LanguageParser
 # from .tools import MinimalSource
 
 
@@ -19,66 +21,83 @@ load_dotenv()
 
 class Chunker(BaseModel):
     data_base: Path
-    list_other: list[Path] = []
-    list_txt: list[Path] = []
+    list_txt: list[str] = []
     list_img: list[Path] = []
+    list_doc: list[Document] = []
+    list_chunk: list[Document] = []
 
     @model_validator(mode='after')
     def find_suffix(self) -> 'Chunker':
+        txt = ['.json', '.yaml', '.yml', '.toml', '.xml', '.sh', '.bash',
+               '.md', '.txt']
+        bin_extensions = ['.pyc', '.so', '.pyd', '.db', '.sqlite', '.a']
+
         for element in tqdm(self.data_base.rglob('*'),
-                            desc="Extraction des suffix"):
+                            desc="Extraction des fichiers"):
             if element.is_file():
-
-                mime = magic.Magic(mime=True)
-                type_mime = mime.from_file(element)
-
-                s = element.suffix
+                try:
+                    type_mime = magic.from_file(str(element), mime=True)
+                except Exception:
+                    continue
+                s = element.suffix.lower()
 
                 if type_mime.startswith('text/'):
-                    if s not in self.list_txt:
+                    if s and s not in self.list_txt \
+                         and s not in bin_extensions:
                         self.list_txt.append(s)
-
                 elif type_mime.startswith('application/'):
-                    if s not in self.list_txt:
+                    if s not in self.list_txt and s in txt:
                         self.list_txt.append(s)
-
                 elif type_mime.startswith('image/'):
                     if s != ".ico":
                         self.list_img.append(element)
         return self
+
+    def process_text(self) -> None:
+        if not self.list_txt:
+            print("Aucun fichier texte détecté.")
+            return
+
+        loader = GenericLoader.from_filesystem(
+            self.data_base,
+            glob="**/*",
+            suffixes=self.list_txt,
+            parser=TextParser()
+        )
+        try:
+            docs_texte_et_code = loader.load()
+            self.list_doc.extend(docs_texte_et_code)
+
+        except Exception as e:
+            print(f"Erreur lors du parsing des fichiers : {e}")
 
     def _encode_image(self, image_path: Path) -> str:
         """Encode une image en Base64 pour l'envoyer au modèle via l'API."""
         with open(image_path, "rb") as image_file:
             return base64.b64encode(image_file.read()).decode('utf-8')
 
-    def loader_database(self) -> None:
-        print(f"\nTraitement de {len(self.list_img)} images avec Gemini...")
-
-        # Initialisation du modèle (pas besoin de parseur obsolète !)
-        llm_vision = ChatGoogleGenerativeAI(
-            model="gemini-flash-latest",
-            timeout=30,
-            max_retries=1
-        )
+    def process_images(self) -> None:
+        llm_vision = ChatGroq(
+            model="meta-llama/llama-4-scout-17b-16e-instruct", temperature=0)
         docs_images = []
 
-        # Boucle d'analyse manuelle avec barre de progression
         for img_path in tqdm(self.list_img, desc="Analyse Vision"):
             try:
                 file_size_kb = os.path.getsize(img_path) / 1024
-                if file_size_kb > 4000: # Si l'image fait plus de 4 Mo, on l'ignore (trop lourde pour API)
-                    print(f"\n⚠️ Fichier ignoré (trop lourd, {file_size_kb:.0f} Ko): {img_path.name}")
+                if file_size_kb > 4000:
+                    print("\n⚠️ Fichier ignoré (Trop lourd pour Groq, > 4 Mo)"
+                          f" : {img_path.name}")
                     continue
+
                 base64_image = self._encode_image(img_path)
 
-                # Format standard LangChain pour l'envoi d'images
                 message = HumanMessage(
                     content=[
-                        {"type": "text", "text": "Décris cette image technique en détail. Si c'est un schéma, décris l'architecture. Si c'est du texte ou du code, retranscris-le."},
+                        {"type": "text", "text": "What's in this image?"},
                         {
                             "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
+                            "image_url": {"url": "data:image/jpeg;base64,"
+                                          f"{base64_image}"}
                         }
                     ]
                 )
@@ -86,49 +105,91 @@ class Chunker(BaseModel):
                 reponse = llm_vision.invoke([message])
 
                 texte_description = ""
-
-                # Si la réponse est une simple chaîne (le comportement standard attendu)
                 if isinstance(reponse.content, str):
                     texte_description = reponse.content
-
-                # Si la réponse est une liste (le comportement de Gemini Vision)
                 elif isinstance(reponse.content, list):
-                    # On cherche le premier élément qui contient du texte
                     for element in reponse.content:
                         if isinstance(element, dict) and "text" in element:
                             texte_description = element["text"]
                             break
-                        # Si l'élément est juste une string dans la liste
                         elif isinstance(element, str):
                             texte_description += element
 
-                # Création du Document LangChain avec une vraie String
                 doc = Document(
                     page_content=texte_description,
-                    metadata={"source": str(img_path), "type": "image", "format": img_path.suffix}
+                    metadata={"source": str(img_path), "type": "image",
+                              "format": img_path.suffix}
                 )
                 docs_images.append(doc)
-
-                # ⏱️ Pause de 4 secondes pour éviter le ban 429 RESOURCE_EXHAUSTED
-                time.sleep(4)
+                time.sleep(2)
 
             except Exception as e:
-                if "429" in str(e):
-                    print(f"\n⚠️ Quota API atteint ! Pause forcée de 60 secondes...")
+                error_msg = str(e)
+                print(error_msg)
+                if "429" in error_msg:
+                    print("\n⚠️ Quota Groq atteint ! Pause de 60 secondes...")
                     time.sleep(60)
                 else:
                     print(f"\n❌ Erreur sur {img_path.name}: {e}")
 
-        print(f"\n✅ Terminé : {len(docs_images)} images analysées avec succès !")
+        self.list_doc.extend(docs_images)
 
-        # Affiche la première description pour vérifier que tout marche bien
-        if docs_images:
-            print("\nExemple de la première description extraite :")
-            print("-" * 50)
-            print(docs_images[0].page_content)
+    def create_smart_chunks(self, chunk_size: int = 500,
+                            chunk_overlap: int = 50) -> None:
+        splitters = {
+            "default": RecursiveCharacterTextSplitter(
+                chunk_size=chunk_size, chunk_overlap=chunk_overlap,
+                add_start_index=True
+            ),
+            ".py": RecursiveCharacterTextSplitter.from_language(
+                language=Language.PYTHON, chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+                add_start_index=True
+            ),
+            ".cpp": RecursiveCharacterTextSplitter.from_language(
+                language=Language.CPP, chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+                add_start_index=True
+            ),
+            ".h": RecursiveCharacterTextSplitter.from_language(
+                language=Language.CPP, chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+                add_start_index=True
+            ),
+            ".md": RecursiveCharacterTextSplitter.from_language(
+                language=Language.MARKDOWN, chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+                add_start_index=True
+            ),
+            ".js": RecursiveCharacterTextSplitter.from_language(
+                language=Language.JS, chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+                add_start_index=True
+            )
+        }
+
+        for doc in tqdm(self.list_doc, desc="Decoupage en chunks:"):
+            source_path = doc.metadata.get("source", "")
+            ext = doc.metadata.get("format", "") # Utilisé pour vos images
+
+            if not ext and "." in source_path:
+                ext = "." + source_path.split(".")[-1].lower()
+
+            splitter = splitters.get(ext, splitters["default"])
+
+            chunks = splitter.split_documents([doc])
+            self.list_chunk.extend(chunks)
+            # for chunk in chucks:
+            #     print("start:", chunk.metadata.get("start_index"))
+            #     print("end = ", len(chunks.page_content))
+                # self.list_chunk.append(MinimalSource(file_path=source_path,
+                #                                     first_character_index=))
 
 
 if __name__ == '__main__':
     ch = Chunker(data_base=Path('/home/gematura/cursus_42/rag/data/vllm-0.10.1/'))
-    # print(ch.list_img_suffix)
-    ch.loader_database()
+    ch.process_text()
+    ch.create_smart_chunks()
+    for elem in ch.list_chunk:
+        print(elem.metadata['start_index'])
+        print("===========================================================================================")
