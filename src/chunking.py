@@ -3,7 +3,6 @@ import base64
 import time
 from dotenv import load_dotenv
 from pathlib import Path
-from typing import Any
 import magic
 from tqdm import tqdm
 from pydantic import BaseModel, model_validator
@@ -13,7 +12,7 @@ from langchain_community.document_loaders.generic import GenericLoader
 from langchain_community.document_loaders.parsers.txt import TextParser
 from langchain_text_splitters import RecursiveCharacterTextSplitter, Language
 from langchain_core.documents import Document
-# from .tools import MinimalSource
+from src.tools import MinimalSource
 
 
 load_dotenv()
@@ -24,7 +23,7 @@ class Chunker(BaseModel):
     list_txt: list[str] = []
     list_img: list[Path] = []
     list_doc: list[Document] = []
-    list_chunk: list[Document] = []
+    list_chunk: list[MinimalSource] = []
 
     @model_validator(mode='after')
     def find_suffix(self) -> 'Chunker':
@@ -65,8 +64,8 @@ class Chunker(BaseModel):
             parser=TextParser()
         )
         try:
-            docs_texte_et_code = loader.load()
-            self.list_doc.extend(docs_texte_et_code)
+            docs_text = tqdm(loader.load(), desc="Analyse des fichiers")
+            self.list_doc.extend(docs_text)
 
         except Exception as e:
             print(f"Erreur lors du parsing des fichiers : {e}")
@@ -81,11 +80,11 @@ class Chunker(BaseModel):
             model="meta-llama/llama-4-scout-17b-16e-instruct", temperature=0)
         docs_images = []
 
-        for img_path in tqdm(self.list_img, desc="Analyse Vision"):
+        for img_path in tqdm(self.list_img, desc="Analyse des images"):
             try:
                 file_size_kb = os.path.getsize(img_path) / 1024
                 if file_size_kb > 4000:
-                    print("\n⚠️ Fichier ignoré (Trop lourd pour Groq, > 4 Mo)"
+                    print("\nFichier ignoré (Trop lourd pour Groq, > 4 Mo)"
                           f" : {img_path.name}")
                     continue
 
@@ -127,15 +126,16 @@ class Chunker(BaseModel):
                 error_msg = str(e)
                 print(error_msg)
                 if "429" in error_msg:
-                    print("\n⚠️ Quota Groq atteint ! Pause de 60 secondes...")
+                    print("\nQuota Groq atteint ! Pause de 60 secondes...")
                     time.sleep(60)
                 else:
-                    print(f"\n❌ Erreur sur {img_path.name}: {e}")
+                    print(f"\nErreur sur {img_path.name}: {e}")
 
         self.list_doc.extend(docs_images)
 
-    def create_smart_chunks(self, chunk_size: int = 500,
-                            chunk_overlap: int = 50) -> None:
+    def create_smart_chunks(self, chunk_size: int) -> None:
+        chunk_overlap = int(chunk_size * 0.1)
+
         splitters = {
             "default": RecursiveCharacterTextSplitter(
                 chunk_size=chunk_size, chunk_overlap=chunk_overlap,
@@ -170,7 +170,7 @@ class Chunker(BaseModel):
 
         for doc in tqdm(self.list_doc, desc="Decoupage en chunks:"):
             source_path = doc.metadata.get("source", "")
-            ext = doc.metadata.get("format", "") # Utilisé pour vos images
+            ext = doc.metadata.get("format", "")
 
             if not ext and "." in source_path:
                 ext = "." + source_path.split(".")[-1].lower()
@@ -178,18 +178,10 @@ class Chunker(BaseModel):
             splitter = splitters.get(ext, splitters["default"])
 
             chunks = splitter.split_documents([doc])
-            self.list_chunk.extend(chunks)
-            # for chunk in chucks:
-            #     print("start:", chunk.metadata.get("start_index"))
-            #     print("end = ", len(chunks.page_content))
-                # self.list_chunk.append(MinimalSource(file_path=source_path,
-                #                                     first_character_index=))
-
-
-if __name__ == '__main__':
-    ch = Chunker(data_base=Path('/home/gematura/cursus_42/rag/data/vllm-0.10.1/'))
-    ch.process_text()
-    ch.create_smart_chunks()
-    for elem in ch.list_chunk:
-        print(elem.metadata['start_index'])
-        print("===========================================================================================")
+            for elem in chunks:
+                self.list_chunk.append(MinimalSource(
+                    file_path=elem.metadata['source'],
+                    first_character_index=elem.metadata['start_index'],
+                    last_character_index=len(elem.page_content)
+                    + elem.metadata['start_index'],
+                    chunk_content=elem.page_content))

@@ -1,7 +1,6 @@
 BLUE = \033[1;34m
 GREEN = \033[1;32m
 RESET = \033[0m
-MAP ?= maps/easy/01_linear_path.txt
 
 .PHONY: install run debug clean lint lint-strict
 
@@ -10,16 +9,12 @@ install:
 	uv sync
 
 run:
-	@printf '$(BLUE)Lancement du simulateur sur la map : $(MAP)...$(RESET)\n'
-	uv run python main.py $(MAP)
-
-visual:
-	@printf '$(BLUE)Lancement du simulateur en mode visualisation sur la map : $(MAP)...$(RESET)\n'
-	uv run python main.py --gui $(MAP)
+	@printf '$(BLUE)Lancement de RAG$(RESET)\n'
+	uv run python -m src
 
 debug:
-	@printf '$(BLUE)Lancement en mode debug sur la map : $(MAP)...$(RESET)\n'
-	uv run python -m pdb main.py $(MAP)
+	@printf '$(BLUE)Lancement en mode debug de RAG...$(RESET)\n'
+	uv run python -m pdb src
 
 clean:
 	@printf '$(BLUE)Nettoyage des fichiers temporaires...$(RESET)\n'
