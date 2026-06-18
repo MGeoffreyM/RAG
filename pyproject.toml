@@ -29,3 +29,7 @@ dependencies = [
 exclude = [
     "^data/"
 ]
+
+[[tool.mypy.overrides]]
+module = ["bm25s.*", "fire.*"]
+ignore_missing_imports = true

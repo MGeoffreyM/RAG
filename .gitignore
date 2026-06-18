@@ -5,6 +5,7 @@ __pycache__/
 .env
 .vscode
 data/
+
 # C extensions
 *.so
 

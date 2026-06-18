@@ -19,6 +19,7 @@ debug:
 clean:
 	@printf '$(BLUE)Nettoyage des fichiers temporaires...$(RESET)\n'
 	rm -rf .mypy_cache
+	rm -r /home/gematura/cursus_42/rag/data/processed
 	find . -type d -name '__pycache__' -exec rm -rf {} +
 	uv clean
 

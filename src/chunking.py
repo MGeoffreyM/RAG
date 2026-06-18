@@ -64,7 +64,7 @@ class Chunker(BaseModel):
             parser=TextParser()
         )
         try:
-            docs_text = tqdm(loader.load(), desc="Analyse des fichiers")
+            docs_text = loader.load()
             self.list_doc.extend(docs_text)
 
         except Exception as e:
@@ -168,7 +168,7 @@ class Chunker(BaseModel):
             )
         }
 
-        for doc in tqdm(self.list_doc, desc="Decoupage en chunks:"):
+        for doc in tqdm(self.list_doc, desc="Decoupage en chunks"):
             source_path = doc.metadata.get("source", "")
             ext = doc.metadata.get("format", "")
 
