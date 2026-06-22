@@ -19,7 +19,7 @@ text = tokenizer.apply_chat_template(
     messages,
     tokenize=False,
     add_generation_prompt=True,
-    enable_thinking=True # Switches between thinking and non-thinking modes. Default is True.
+    enable_thinking=False # Switches between thinking and non-thinking modes. Default is True.
 )
 model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
 
@@ -37,8 +37,10 @@ try:
 except ValueError:
     index = 0
 
-thinking_content = tokenizer.decode(output_ids[:index], skip_special_tokens=True).strip("\n")
-content = tokenizer.decode(output_ids[index:], skip_special_tokens=True).strip("\n")
+thinking_content = tokenizer.decode(output_ids[:index],
+                                    skip_special_tokens=True)
+content = tokenizer.decode(output_ids[index:],
+                           skip_special_tokens=True)
 
 print("thinking content:", thinking_content)
 print("content:", content)
