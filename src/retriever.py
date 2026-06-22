@@ -3,9 +3,11 @@ import uuid
 import bm25s
 from pathlib import Path
 from pydantic import BaseModel
+from src.llm import Llm
 from src.tools import (MinimalSource,
                        MinimalSearchResults,
-                       StudentSearchResults,)
+                       StudentSearchResults,
+                       MinimalAnswer, StudentSearchResultsAndAnswer)
 
 
 class Retriever(BaseModel):
@@ -63,5 +65,43 @@ class Retriever(BaseModel):
 
         return StudentSearchResults(
             search_results=[minimal_result],
+            k=k
+        )
+
+    def answer_query(self, question: str,
+                     k: int = 10,
+                     question_id: str = None) -> StudentSearchResultsAndAnswer:
+        llm = Llm("Qwen/Qwen3-0.6B")
+        search_result = self.search_query(question, k, question_id)
+        minimal_search = search_result.search_results[0]
+
+        context = ""
+        for i, source in enumerate(minimal_search.retrieved_sources):
+            context += f"--- Source {i+1} ({source.file_path}) ---\n"
+            context += f"{source.chunk_content}\n\n"
+
+        prompt = f"""You are an expert technical development assistant.
+        Your task is to answer the question based SOLELY on the provided
+        context.
+        If the context does not contain the information needed to answer the
+        question, you must answer exactly: "I don't know based on the provided
+        context."
+        Don't make any assumptions.
+        Context:
+        {context}
+        Question: {question}
+        Answer:"""
+
+        response = llm.prompting(prompt)
+
+        minimal_answer = MinimalAnswer(
+            question_id=minimal_search.question_id,
+            question=minimal_search.question,
+            retrieved_sources=minimal_search.retrieved_sources,
+            answer=response
+        )
+
+        return StudentSearchResultsAndAnswer(
+            search_results=[minimal_answer],
             k=k
         )

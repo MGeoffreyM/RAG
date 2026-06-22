@@ -2,8 +2,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 class Llm():
-    def __init__(self):
-        model_name = "Qwen/Qwen3-0.6B"
+    def __init__(self, model_name):
+        self.model_name = model_name
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
@@ -19,7 +19,8 @@ class Llm():
             add_generation_prompt=True,
             enable_thinking=False
         )
-        model_inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
+        model_inputs = self.tokenizer(
+            [text], return_tensors="pt").to(self.model.device)
 
         generated_ids = self.model.generate(
             **model_inputs,
@@ -27,21 +28,13 @@ class Llm():
         )
         output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist() 
 
-        # parsing thinking content
         try:
-            # rindex finding 151668 (</think>)
             index = len(output_ids) - output_ids[::-1].index(151668)
         except ValueError:
             index = 0
 
-        thinking_content = self.tokenizer.decode(output_ids[:index],
-                                            skip_special_tokens=True)
+        # thinking_content = self.tokenizer.decode(output_ids[:index],
+        #                                          skip_special_tokens=True)
         content = self.tokenizer.decode(output_ids[index:],
-                                skip_special_tokens=True)
+                                        skip_special_tokens=True)
         return content
-
-
-if __name__ == "__main__":
-    llm = Llm()
-    prompt = "Give me a short introduction to large language model."
-    print(llm.prompting(prompt))

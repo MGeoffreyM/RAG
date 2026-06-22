@@ -4,7 +4,10 @@ from pathlib import Path
 from tqdm import tqdm
 from src.chunking import Chunker
 from src.retriever import Retriever
-from src.tools import UnansweredQuestion, StudentSearchResults, MinimalSearchResults
+from src.Llm import Llm
+from src.tools import (UnansweredQuestion,
+                       StudentSearchResults,
+                       MinimalSearchResults)
 
 
 class RagCLI:
@@ -14,6 +17,7 @@ class RagCLI:
         self.chunks_path = Path("data/processed/chunks/chunks.json")
         self.rt = Retriever(
             index_dir=self.index_path, chunks_file=self.chunks_path)
+        self.llm = Llm("Qwen/Qwen3-0.6B")
 
     def index(self,
               data_path: Path = Path(
@@ -46,9 +50,6 @@ class RagCLI:
         try:
             result = self.rt.search_query(question, k, question_id)
             print(result.model_dump_json(indent=2))
-            save = "data/processed/save.json"
-            with open(save, 'w', encoding='utf-8') as f:
-                json.dump(result.model_dump_json(indent=2), f)
         except Exception as e:
             print(f"Erreur à la recherche : {e}")
 
@@ -88,8 +89,15 @@ class RagCLI:
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(final_results.model_dump_json(indent=2))
 
-    def answer(self) -> None:
-        print("answer a implementer")
+    def answer(self,
+               question: str,
+               k: int = 10,
+               question_id: str | None = None) -> None:
+        try:
+            result = self.rt.answer_query_query(question, k, question_id)
+            print(result.model_dump_json(indent=2))
+        except Exception as e:
+            print(f"Erreur à la recherche : {e}")
 
     def answer_dataset(self) -> None:
         print("answer_dataset a implementer")
