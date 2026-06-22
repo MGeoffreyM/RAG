@@ -4,8 +4,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 class Llm():
     def __init__(self):
         model_name = "Qwen/Qwen3-0.6B"
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForCausalLM.from_pretrained(
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype="auto",
             device_map="auto"
@@ -39,3 +39,9 @@ class Llm():
         content = self.tokenizer.decode(output_ids[index:],
                                 skip_special_tokens=True)
         return content
+
+
+if __name__ == "__main__":
+    llm = Llm()
+    prompt = "Give me a short introduction to large language model."
+    print(llm.prompting(prompt))
