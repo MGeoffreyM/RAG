@@ -4,7 +4,6 @@ from pathlib import Path
 from tqdm import tqdm
 from src.chunking import Chunker
 from src.retriever import Retriever
-from src.Llm import Llm
 from src.tools import (UnansweredQuestion,
                        StudentSearchResults,
                        MinimalSearchResults)
@@ -17,7 +16,6 @@ class RagCLI:
         self.chunks_path = Path("data/processed/chunks/chunks.json")
         self.rt = Retriever(
             index_dir=self.index_path, chunks_file=self.chunks_path)
-        self.llm = Llm("Qwen/Qwen3-0.6B")
 
     def index(self,
               data_path: Path = Path(
@@ -94,8 +92,10 @@ class RagCLI:
                k: int = 10,
                question_id: str | None = None) -> None:
         try:
-            result = self.rt.answer_query_query(question, k, question_id)
+            result = self.rt.answer_query(question, k, question_id)
             print(result.model_dump_json(indent=2))
+            with open("/home/geoffrey/rag/data/processed/answer.json", "w", encoding="utf-8") as r:
+                r.write(result.model_dump_json(indent=2))
         except Exception as e:
             print(f"Erreur à la recherche : {e}")
 
