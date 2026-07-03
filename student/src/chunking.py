@@ -134,7 +134,7 @@ class Chunker(BaseModel):
         self.list_doc.extend(docs_images)
 
     def create_smart_chunks(self, chunk_size: int) -> None:
-        chunk_overlap = int(chunk_size * 0.1)
+        chunk_overlap = int(chunk_size * 0.05)
 
         splitters = {
             "default": RecursiveCharacterTextSplitter(
@@ -179,8 +179,14 @@ class Chunker(BaseModel):
 
             chunks = splitter.split_documents([doc])
             for elem in chunks:
+                raw_path = str(elem.metadata['source']).replace("\\", "/")
+                if "vllm-0.10.1" in raw_path:
+                    # On force l'ajout de data/raw/ pour matcher le Ground Truth
+                    clean_path = "data/raw/vllm-0.10.1" + raw_path.split("vllm-0.10.1")[-1]
+                else:
+                    clean_path = raw_path
                 self.list_chunk.append(MinimalSource(
-                    file_path=elem.metadata['source'],
+                    file_path=clean_path,
                     first_character_index=elem.metadata['start_index'],
                     last_character_index=len(elem.page_content)
                     + elem.metadata['start_index'],

@@ -26,7 +26,7 @@ class RagDataset(BaseModel):
 
 class MinimalSearchResults(BaseModel):
     question_id: str
-    question: str  # _str possible correction
+    question_str: str  # _str possible correction
     retrieved_sources: list[MinimalSource]
 
 
