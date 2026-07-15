@@ -1,9 +1,11 @@
 import json
 import uuid
 import bm25s
+import dspy
 from pathlib import Path
 from typing import Any
 from pydantic import BaseModel
+from src.llm import AnswerBot
 from src.tools import (MinimalSource,
                        MinimalSearchResults,
                        StudentSearchResults,
@@ -70,32 +72,26 @@ class Retriever(BaseModel):
         )
 
     def generate_answer(self, question: str,
-                        sources: list[MinimalSource]) -> str:
+                        sources: list[MinimalSource]) -> Any:
         """Génère une réponse textuelle à partir de sources déjà trouvées."""
         context = ""
         for i, source in enumerate(sources):
             context += f"--- Source {i+1} ({source.file_path}) ---\n"
             context += f"{source.chunk_content}\n\n"
+        self._call_qwen_model()
+        answer_bot = dspy.Predict(AnswerBot)
+        answer = answer_bot(question=question, context=context)
 
-        prompt = f"""You are an expert technical development assistant.
-                     Your task is to answer the question based SOLELY on the
-                     provided context.
-                     If the context does not contain the information needed to
-                     answer the question, you must answer exactly: "I don't
-                     know based on the provided context." Don't make any
-                     assumptions.
-                     Context: {context}, Question: {question}, Answer:"""
-        response, thinking = self._call_qwen_model(prompt)
-        print(thinking)
-        return response
+        return answer.answer
 
-    def _call_qwen_model(self, prompt: str) -> tuple[str, str]:
+    def _call_qwen_model(self) -> None:
+        name: str = "openai/Qwen/Qwen3-0.6B"
+        api_key: str = "sk-fake-key"
         if self._llm_instance is None:
-            # Lazy import
-            from src.llm import Llm
-            self._llm_instance = Llm("Qwen/Qwen3-0.6B")
-
-        return self._llm_instance.prompting(prompt)
+            self._llm_instance = dspy.LM(name,
+                                         api_base="http://localhost:8000/v1",
+                                         api_key=api_key)
+            dspy.configure(lm=self._llm_instance)
 
     def answer_query(self, question: str, k: int = 1,
                      question_id: str | None = None
@@ -106,13 +102,13 @@ class Retriever(BaseModel):
         minimal_search = search_res.search_results[0]
 
         # 2. On génère la réponse
-        answer_text = self.generate_answer(minimal_search.question,
+        answer_text = self.generate_answer(minimal_search.question_str,
                                            minimal_search.retrieved_sources)
 
         # 3. On formate
         minimal_answer = MinimalAnswer(
             question_id=minimal_search.question_id,
-            question=minimal_search.question,
+            question_str=minimal_search.question_str,
             retrieved_sources=minimal_search.retrieved_sources,
             answer=answer_text
         )

@@ -6,14 +6,14 @@ RESET = \033[0m
 
 install:
 	@printf '$(BLUE)Installation des dépendances avec uv...$(RESET)\n'
-	mkdir -p /goinfre/$(USER)/mes_venvs/rag_venv
-	ln -s /goinfre/$(USER)/mes_venvs/rag_venv .venv
 	uv sync
 
 run:
 	@printf '$(BLUE)Lancement de RAG$(RESET)\n'
 	uv run python -m src index
-	uv run python -m src search_dataset --dataset_path="/home/gematura/cursus_42/rag/data/datasets_public/public/UnansweredQuestions/dataset_code_public.json"
+	uv run python -m src search_dataset --dataset_path="../data/datasets/datasets_public/public/UnansweredQuestions/dataset_code_public.json"
+	uv run python -m src answer_dataset --student_search_results_path="data/output/search_results/dataset_code_public.json"
+	
 debug:
 	@printf '$(BLUE)Lancement en mode debug de RAG...$(RESET)\n'
 	uv run python -m pdb src
@@ -23,8 +23,8 @@ clean:
 	rm -rf .mypy_cache
 	find . -type d -name '__pycache__' -exec rm -rf {} +
 	uv clean
-	rm -r /home/gematura/cursus_42/rag/data/processed
-	rm -r /home/gematura/cursus_42/rag/data/output
+	rm -r data/processed
+	rm -r data/output
 
 fclean: clean
 	@printf "$(BLUE)Suppression de l'environnement virtuel...$(RESET)\n"

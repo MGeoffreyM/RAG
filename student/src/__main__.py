@@ -21,7 +21,7 @@ class RagCLI:
 
     def index(self,
               data_path: Path = Path(
-                  'data/vllm-0.10.1/'),
+                  'data/raw/vllm-0.10.1/'),
               max_chunk_size: int = 2000,
               index_image: bool = False) -> None:
         """
