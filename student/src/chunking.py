@@ -134,37 +134,37 @@ class Chunker(BaseModel):
         self.list_doc.extend(docs_images)
 
     def create_smart_chunks(self, chunk_size: int) -> None:
-        chunk_overlap = int(chunk_size * 0.05)
+        chunk_overlap = int(chunk_size * 0.25)
 
         splitters = {
             "default": RecursiveCharacterTextSplitter(
                 chunk_size=chunk_size, chunk_overlap=chunk_overlap,
-                add_start_index=True
+                add_start_index=True, strip_whitespace=False
             ),
             ".py": RecursiveCharacterTextSplitter.from_language(
                 language=Language.PYTHON, chunk_size=chunk_size,
                 chunk_overlap=chunk_overlap,
-                add_start_index=True
+                add_start_index=True, strip_whitespace=False
             ),
             ".cpp": RecursiveCharacterTextSplitter.from_language(
                 language=Language.CPP, chunk_size=chunk_size,
                 chunk_overlap=chunk_overlap,
-                add_start_index=True
+                add_start_index=True, strip_whitespace=False
             ),
             ".h": RecursiveCharacterTextSplitter.from_language(
                 language=Language.CPP, chunk_size=chunk_size,
                 chunk_overlap=chunk_overlap,
-                add_start_index=True
+                add_start_index=True, strip_whitespace=False
             ),
             ".md": RecursiveCharacterTextSplitter.from_language(
                 language=Language.MARKDOWN, chunk_size=chunk_size,
                 chunk_overlap=chunk_overlap,
-                add_start_index=True
+                add_start_index=True, strip_whitespace=False
             ),
             ".js": RecursiveCharacterTextSplitter.from_language(
                 language=Language.JS, chunk_size=chunk_size,
                 chunk_overlap=chunk_overlap,
-                add_start_index=True
+                add_start_index=True, strip_whitespace=False
             )
         }
 
@@ -180,13 +180,8 @@ class Chunker(BaseModel):
             chunks = splitter.split_documents([doc])
             for elem in chunks:
                 raw_path = str(elem.metadata['source']).replace("\\", "/")
-                if "vllm-0.10.1" in raw_path:
-                    # On force l'ajout de data/raw/ pour matcher le Ground Truth
-                    clean_path = "data/raw/vllm-0.10.1" + raw_path.split("vllm-0.10.1")[-1]
-                else:
-                    clean_path = raw_path
                 self.list_chunk.append(MinimalSource(
-                    file_path=clean_path,
+                    file_path=raw_path,
                     first_character_index=elem.metadata['start_index'],
                     last_character_index=len(elem.page_content)
                     + elem.metadata['start_index'],

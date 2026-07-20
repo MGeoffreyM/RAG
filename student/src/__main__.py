@@ -21,8 +21,8 @@ class RagCLI:
 
     def index(self,
               data_path: Path = Path(
-                  'data/vllm-0.10.1/'),
-              max_chunk_size: int = 2000,
+                  'data/raw/vllm-0.10.1/'),
+              max_chunk_size: int = 800,
               index_image: bool = False) -> None:
         """
         Indexe la base de données et crée les chunks.
@@ -164,8 +164,7 @@ class RagCLI:
 
         ev = Evaluator(
             student_answer_path=Path(student_answer_path),
-            dataset_path=Path(dataset_path),
-            max_context_length=max_context_length
+            dataset_path=Path(dataset_path)
         )
         ev.run_evaluation(k=k)
 

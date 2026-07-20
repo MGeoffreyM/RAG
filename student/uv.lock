@@ -1470,6 +1470,23 @@ wheels = [
 ]
 
 [[package]]
+name = "pystemmer"
+version = "3.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/78/95/bb893462b08db211b248f6b1aaa0dc07d068dc86f180178bc9072fef86bb/pystemmer-3.1.0.tar.gz", hash = "sha256:083cc3ed90f4c3b0668f8e31c2925cbb4db3bf0fd6d710e0ad0914f33685f7df", size = 302551, upload-time = "2026-05-22T11:23:44.581Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e0/10/1a95c61e7898e1bdb2964bb361074f7aa9417fd0c4a141dea7c2a210ce18/pystemmer-3.1.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:dced40f3aa6326b6ff8f2c5eb87d8a5a3229b32f2e0e4f7de54212bc2d33cead", size = 241535, upload-time = "2026-05-22T11:13:37.992Z" },
+    { url = "https://files.pythonhosted.org/packages/e1/45/a074489a02121658105480771ce4b01bdcc865369fda3a55e7ac0f1aea54/pystemmer-3.1.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:c1b1cb9f84ca419e24446e0e8d32218027ba574048b4ad0ae233d1b94ff52c63", size = 247743, upload-time = "2026-05-22T11:13:39.762Z" },
+    { url = "https://files.pythonhosted.org/packages/47/e6/d6f90ce7f89dca7466c4238e9303748e7685a4b028f4ebfa339bbe51da02/pystemmer-3.1.0-cp310-cp310-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:c6d3d499270ffb8822a7dfb0ed6dfed8c4971a9c581206b898f6e0e7bccd7113", size = 733901, upload-time = "2026-05-22T11:13:41.68Z" },
+    { url = "https://files.pythonhosted.org/packages/bc/88/dabb47c125987233d7922e4bca0ef24cec84a983a45cfec2ff75ac597689/pystemmer-3.1.0-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:033fbad2c93fbaacc9e3f2a64c8edd9c6797c7bbf024a06ed4666b497bb30f68", size = 741980, upload-time = "2026-05-22T11:13:44.961Z" },
+    { url = "https://files.pythonhosted.org/packages/0e/53/dd9ddf1d09ff5e7fe6990eeffc72399e6935864e9548a7ae768784084196/pystemmer-3.1.0-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:87d5c1acafed64075116d48fda1ad28171071255c1df2c59ce46e2ce7aba61f7", size = 739813, upload-time = "2026-05-22T11:13:46.687Z" },
+    { url = "https://files.pythonhosted.org/packages/56/32/0fc7263f38b5ea30ad832a8f39dc7514a0356090537cbe977153317171b6/pystemmer-3.1.0-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:3f613eb1fd3cfb502012e81dc44731f88ec0de089febbdaf8490bc97283a65bd", size = 736336, upload-time = "2026-05-22T11:13:48.061Z" },
+    { url = "https://files.pythonhosted.org/packages/3d/d6/e71a12764e22261b57b108055e1ce574c57f801ab312e2fbc26c0191121e/pystemmer-3.1.0-cp310-cp310-win32.whl", hash = "sha256:1c8ef2419862bd518b99bd64008f7f1d538150e11ddb2826d54ab5bc727d93fc", size = 157083, upload-time = "2026-05-22T11:13:50.291Z" },
+    { url = "https://files.pythonhosted.org/packages/17/68/17f7b310a3b5228c3198bf3ce46f6709306b5d0d3593c9af7aa974ace495/pystemmer-3.1.0-cp310-cp310-win_amd64.whl", hash = "sha256:bb8208367b476f3d5d8250d1dfd7296256a270b0bf3ab770710ddcbb6f22d496", size = 224551, upload-time = "2026-05-22T11:13:51.756Z" },
+    { url = "https://files.pythonhosted.org/packages/2e/ae/ad754bb194c2b430235082e87faa2aa3972c80126a4f9930263bb433ceda/pystemmer-3.1.0-cp310-cp310-win_arm64.whl", hash = "sha256:378361efc77b3e59b0c8b49efc2b1ba71ab85654529e2e4562faaec40ee62396", size = 226461, upload-time = "2026-05-22T11:13:53.452Z" },
+]
+
+[[package]]
 name = "python-dotenv"
 version = "1.2.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1523,6 +1540,7 @@ dependencies = [
     { name = "mypy" },
     { name = "pillow" },
     { name = "pydantic" },
+    { name = "pystemmer" },
     { name = "python-dotenv" },
     { name = "python-magic" },
     { name = "torch" },
@@ -1549,6 +1567,7 @@ requires-dist = [
     { name = "mypy", specifier = ">=2.1.0" },
     { name = "pillow", specifier = ">=12.2.0" },
     { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "pystemmer", specifier = ">=3.1.0" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "python-magic", specifier = ">=0.4.27" },
     { name = "torch", specifier = ">=2.12.1" },

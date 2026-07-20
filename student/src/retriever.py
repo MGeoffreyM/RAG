@@ -1,6 +1,7 @@
 import json
 import uuid
 import bm25s
+import Stemmer
 from pathlib import Path
 from typing import Any
 from pydantic import BaseModel
@@ -9,36 +10,40 @@ from src.tools import (MinimalSource,
                        StudentSearchResults,
                        MinimalAnswer, StudentSearchResultsAndAnswer)
 
-
 class Retriever(BaseModel):
     index_dir: Path
     chunks_file: Path
     _llm_instance: Any = None
 
     def save_index(self, src: list[MinimalSource]) -> None:
-        """Crée l'index BM25 et sauvegarde les métadonnées (chunks)."""
-        corpus: list[str] = [elem.chunk_content for elem in src]
+        """Crée l'index BM25 avec l'Ancre Sémantique Totale."""
+        corpus: list[str] = []
+        for elem in src:
+            # ANCRE SÉMANTIQUE : On convertit tout le chemin en mots-clés
+            # Ex: "data/raw/vllm/docs/features/lora.md" -> "data raw vllm docs features lora md"
+            path_keywords = elem.file_path.replace("/", " ").replace("_", " ").replace(".", " ").replace("-", " ")
+            
+            # On l'injecte au sommet, en gardant le texte original INTACT pour protéger la doc
+            clean_content = f"{path_keywords}\n{elem.chunk_content}"
+            corpus.append(clean_content)
 
-        corpus_tokens = bm25s.tokenize(corpus)
-        retriever = bm25s.BM25()
+        stemmer = Stemmer.Stemmer("english")
+        corpus_tokens = bm25s.tokenize(corpus, stopwords="en", stemmer=stemmer)
+        
+        # On restaure les paramètres standards qui avaient donné 82% à ta doc
+        retriever = bm25s.BM25(k1=1.5, b=0.75)
         retriever.index(corpus_tokens)
 
         self.index_dir.mkdir(parents=True, exist_ok=True)
         retriever.save(str(self.index_dir))
 
         self.chunks_file.parent.mkdir(parents=True, exist_ok=True)
-
         chunks_data = [chunk.model_dump() for chunk in src]
-
         with open(self.chunks_file, 'w', encoding='utf-8') as f:
             json.dump(chunks_data, f, indent=4)
 
     def search_query(self, question: str, k: int = 1,
                      question_id: str | None = None) -> StudentSearchResults:
-        """
-        Charge l'index, recherche les meilleurs chunks pour une question
-        et retourne le JSON formaté selon les normes du sujet.
-        """
         if question_id is None:
             question_id = str(uuid.uuid4())
 
@@ -47,7 +52,10 @@ class Retriever(BaseModel):
         with open(self.chunks_file, 'r', encoding='utf-8') as f:
             chunks_data = json.load(f)
 
-        query_tokens = bm25s.tokenize(question)
+        stemmer = Stemmer.Stemmer("english")
+        
+        # La question reste pure. Le BM25 fera le pont avec l'ancre sémantique.
+        query_tokens = bm25s.tokenize(question, stopwords="en", stemmer=stemmer)
 
         results, scores = retriever.retrieve(query_tokens, k=k)
 
@@ -60,14 +68,11 @@ class Retriever(BaseModel):
 
         minimal_result = MinimalSearchResults(
             question_id=question_id,
-            question_str=question,
+            question_str=question,  # Variable conservée
             retrieved_sources=retrieved_sources
         )
 
-        return StudentSearchResults(
-            search_results=[minimal_result],
-            k=k
-        )
+        return StudentSearchResults(search_results=[minimal_result], k=k)
 
     def generate_answer(self, question: str,
                         sources: list[MinimalSource]) -> str:
