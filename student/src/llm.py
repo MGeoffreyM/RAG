@@ -2,7 +2,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 class Llm():
-    def __init__(self, model_name):
+    def __init__(self, model_name: str) -> None:
         self.model_name = model_name
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForCausalLM.from_pretrained(
@@ -11,7 +11,8 @@ class Llm():
             device_map="auto"
         )
 
-    def prompting(self, prompt: str) -> tuple[str, str]:
+    def prompting(self,
+                  prompt: str) -> tuple[str | list[str], str | list[str]]:
         messages = [{"role": "user", "content": prompt}]
         text = self.tokenizer.apply_chat_template(
             messages,
@@ -22,10 +23,11 @@ class Llm():
         model_inputs = self.tokenizer(
             [text], return_tensors="pt").to(self.model.device)
 
-        generated_ids = self.model.generate(
+        generated_ids = self.model.generate(  # type: ignore[misc]
             **model_inputs,
             max_new_tokens=2048
         )
+
         output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
 
         try:

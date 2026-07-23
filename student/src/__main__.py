@@ -129,11 +129,11 @@ class RagCLI:
                 search_res = MinimalSearchResults(**item)
 
                 answer_text = self.rt.generate_answer(
-                    search_res.question_str, search_res.retrieved_sources)
+                    search_res.question, search_res.retrieved_sources)
 
                 ans = MinimalAnswer(
                     question_id=search_res.question_id,
-                    question_str=search_res.question_str,
+                    question=search_res.question,
                     retrieved_sources=search_res.retrieved_sources,
                     answer=answer_text
                 )

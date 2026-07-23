@@ -7,6 +7,7 @@ requires-python = ">=3.10,<3.11"
 dependencies = [
     "accelerate>=1.14.0",
     "bm25s>=0.3.9",
+    "chromadb>=1.5.9",
     "esprima>=4.0.1",
     "fire>=0.7.1",
     "flake8>=7.3.0",
@@ -22,6 +23,7 @@ dependencies = [
     "pystemmer>=3.1.0",
     "python-dotenv>=1.2.2",
     "python-magic>=0.4.27",
+    "sentence-transformers>=5.6.0",
     "torch>=2.12.1",
     "tqdm>=4.68.1",
     "transformers>=5.12.1",
