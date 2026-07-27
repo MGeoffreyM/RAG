@@ -20,9 +20,9 @@ run:
 	uv run python -m src search_dataset --dataset_path="../data/datasets/datasets_public/public/UnansweredQuestions/dataset_docs_public.json"
 	uv run python -m src answer_dataset --student_search_results_path="data/output/search_results/dataset_docs_public.json"
 	@printf '$(GREEN)Evaluation code$(RESET)\n'
-	uv run python -m src evaluate --student_answer_path="data/output/search_results/dataset_code_public.json" --dataset_path="../data/datasets/datasets_public/public/AnsweredQuestions/dataset_code_public.json"
+	uv run python -m src evaluate --student_search_results_path="data/output/search_results/dataset_code_public.json" --dataset_path="../data/datasets/datasets_public/public/AnsweredQuestions/dataset_code_public.json"
 	@printf '$(GREEN)Evaluation docs$(RESET)\n'
-	uv run python -m src evaluate --student_answer_path="data/output/search_results/dataset_docs_public.json" --dataset_path="../data/datasets/datasets_public/public/AnsweredQuestions/dataset_docs_public.json"
+	uv run python -m src evaluate --student_search_results_path="data/output/search_results/dataset_docs_public.json" --dataset_path="../data/datasets/datasets_public/public/AnsweredQuestions/dataset_docs_public.json"
 
 retrieval:
 	@printf '$(BLUE)Lancement de RAG$(RESET)\n'
@@ -31,9 +31,9 @@ retrieval:
 	uv run python -m src search_dataset --dataset_path="../data/datasets/datasets_public/public/UnansweredQuestions/dataset_code_public.json"
 	uv run python -m src search_dataset --dataset_path="../data/datasets/datasets_public/public/UnansweredQuestions/dataset_docs_public.json"
 	@printf '$(GREEN)Evaluation code$(RESET)\n'
-	uv run python -m src evaluate --student_answer_path="data/output/search_results/dataset_code_public.json" --dataset_path="../data/datasets/datasets_public/public/AnsweredQuestions/dataset_code_public.json"
+	uv run python -m src evaluate --student_search_results_path="data/output/search_results/dataset_code_public.json" --dataset_path="../data/datasets/datasets_public/public/AnsweredQuestions/dataset_code_public.json"
 	@printf '$(GREEN)Evaluation docs$(RESET)\n'
-	uv run python -m src evaluate --student_answer_path="data/output/search_results/dataset_docs_public.json" --dataset_path="../data/datasets/datasets_public/public/AnsweredQuestions/dataset_docs_public.json"
+	uv run python -m src evaluate --student_search_results_path="data/output/search_results/dataset_docs_public.json" --dataset_path="../data/datasets/datasets_public/public/AnsweredQuestions/dataset_docs_public.json"
 
 debug:
 	@printf '$(BLUE)Lancement en mode debug de RAG...$(RESET)\n'

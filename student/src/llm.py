@@ -1,7 +1,13 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer
+import torch
+from PIL import Image
+from transformers import (AutoProcessor,
+                          AutoModelForImageTextToText,
+                          AutoTokenizer,
+                          AutoModelForCausalLM)
+from typing import Any, cast
 
 
-class Llm():
+class AnswerLlm():
     def __init__(self, model_name: str) -> None:
         self.model_name = model_name
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -40,3 +46,61 @@ class Llm():
         content = self.tokenizer.decode(output_ids[index:],
                                         skip_special_tokens=True)
         return (content, thinking_content)
+
+
+class VisionLlm:
+    def __init__(self) -> None:
+        self.model_id = "HuggingFaceTB/SmolVLM-256M-Instruct"
+        self.model = AutoModelForImageTextToText.from_pretrained(
+            self.model_id,
+            dtype=torch.bfloat16,
+            device_map="auto"
+        )
+        self.processor = AutoProcessor.from_pretrained(self.model_id)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
+
+    def describe_image(self, image_path: str) -> str:
+
+        try:
+            image = Image.open(image_path).convert("RGB")
+
+            image.thumbnail((512, 512))
+
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image"},
+                        {"type": "text", "text": "Describe this image in "
+                         "detail. Be concise and technical."}
+                    ]
+                }
+            ]
+
+            prompt = self.processor.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+
+            inputs = self.processor(
+                text=prompt,
+                images=[image],
+                return_tensors="pt"
+            ).to(self.model.device)
+
+            generated_ids = cast(Any, self.model).generate(**inputs,
+                                                           max_new_tokens=256)
+
+            generated_ids_trimmed = [
+                out_ids[len(in_ids):] for in_ids, out_ids in zip(
+                    inputs.input_ids, generated_ids)
+            ]
+
+            output_text = self.tokenizer.decode(
+                generated_ids_trimmed,
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=False
+            )
+            return output_text[0]
+
+        except Exception as e:
+            return f"Erreur lors de l'analyse de l'image : {e}"

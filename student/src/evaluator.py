@@ -5,7 +5,7 @@ from typing import Any
 
 
 class Evaluator(BaseModel):
-    student_answer_path: Path
+    student_search_results_path: Path
     dataset_path: Path
 
     def _calculate_overlap(self, retrieved: dict[str, Any],
@@ -32,8 +32,9 @@ class Evaluator(BaseModel):
 
         return overlap_length / expected_length
 
-    def _evaluate_question_at_k(self, student_results: list[dict],
-                                expected_sources: list[dict], k: int) -> float:
+    def _evaluate_question_at_k(self, student_results: list[dict[str, Any]],
+                                expected_sources: list[dict[str, Any]],
+                                k: int) -> float:
         """Évalue une question pour un k donné (top-k)."""
         if not expected_sources:
             return 0.0
@@ -57,7 +58,8 @@ class Evaluator(BaseModel):
     def run_evaluation(self, k: int = 10) -> None:
         """Lance l'évaluation globale et affiche les statistiques."""
         try:
-            with open(self.student_answer_path, 'r', encoding='utf-8') as f:
+            with open(self.student_search_results_path, 'r',
+                      encoding='utf-8') as f:
                 student_data = json.load(f)
 
             with open(self.dataset_path, 'r', encoding='utf-8') as f:
@@ -78,7 +80,6 @@ class Evaluator(BaseModel):
             print("Evaluation Results")
             print(f"Questions evaluated: {len(evaluable_questions)}")
 
-            # Calcul des Recall pour k = 1, 3, 5, 10
             k_values = [1, 3, 5, 10]
             for current_k in k_values:
                 if current_k > k:
@@ -90,7 +91,6 @@ class Evaluator(BaseModel):
                     q_id = truth_q.get("question_id")
                     expected_sources = truth_q.get("sources", [])
 
-                    # Retrouver la réponse correspondante de l'étudiant
                     student_res = next((item for item in student_questions
                                         if item.get("question_id") == q_id),
                                        None)
@@ -104,7 +104,6 @@ class Evaluator(BaseModel):
 
                 avg_recall = total_recall / len(
                     evaluable_questions) if evaluable_questions else 0.0
-                # Format d'affichage attendu : Recall@01: 0.450
                 print(f"Recall@{current_k:02d}: {avg_recall:.3f}")
 
         except Exception as e:
