@@ -46,7 +46,7 @@ class Evaluator(BaseModel):
             is_found = False
             for retrieved in top_k_retrieved:
                 overlap = self._calculate_overlap(retrieved, expected)
-                if overlap >= 0.05:  # Tolérance de 5% exigée par le sujet
+                if overlap >= 0.05:
                     is_found = True
                     break
 

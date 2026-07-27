@@ -4,7 +4,6 @@ from transformers import (AutoProcessor,
                           AutoModelForImageTextToText,
                           AutoTokenizer,
                           AutoModelForCausalLM)
-from typing import Any, cast
 
 
 class AnswerLlm():
@@ -29,7 +28,7 @@ class AnswerLlm():
         model_inputs = self.tokenizer(
             [text], return_tensors="pt").to(self.model.device)
 
-        generated_ids = self.model.generate(  # type: ignore[misc]
+        generated_ids = self.model.generate(
             **model_inputs,
             max_new_tokens=2048
         )
@@ -60,10 +59,8 @@ class VisionLlm:
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
 
     def describe_image(self, image_path: str) -> str:
-
         try:
             image = Image.open(image_path).convert("RGB")
-
             image.thumbnail((512, 512))
 
             messages = [
@@ -87,20 +84,19 @@ class VisionLlm:
                 return_tensors="pt"
             ).to(self.model.device)
 
-            generated_ids = cast(Any, self.model).generate(**inputs,
-                                                           max_new_tokens=256)
+            generated_ids = self.model.generate(**inputs, max_new_tokens=256)
 
             generated_ids_trimmed = [
                 out_ids[len(in_ids):] for in_ids, out_ids in zip(
                     inputs.input_ids, generated_ids)
             ]
 
-            output_text = self.tokenizer.decode(
-                generated_ids_trimmed,
+            output_text: str = self.tokenizer.decode(
+                generated_ids_trimmed[0],
                 skip_special_tokens=True,
                 clean_up_tokenization_spaces=False
             )
-            return output_text[0]
+            return output_text
 
         except Exception as e:
             return f"Erreur lors de l'analyse de l'image : {e}"

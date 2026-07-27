@@ -255,11 +255,19 @@ class Retriever(BaseModel):
         for i, source in enumerate(sources):
             context += f"--- Source {i+1} ({source.file_path}) ---\n"
             context += f"{source.chunk_content}\n\n"
-        self._call_qwen_model()
-        answer_bot = dspy.Predict(AnswerBot)
-        answer = answer_bot(question=question, context=context)
+        prompt = f"""Answer the question based ONLY on the provided context.
+If the context does not contain the answer, reply exactly: "I don't know."
 
-        return answer.answer
+--- CONTEXT ---
+{context.strip()}
+
+--- QUESTION ---
+{question}
+
+--- ANSWER ---
+"""
+        answer = self._call_qwen_model(prompt)
+        return answer[0]
 
     def answer_query(self, question: UnansweredQuestion,
                      k: int) -> StudentSearchResultsAndAnswer:
@@ -279,7 +287,7 @@ class Retriever(BaseModel):
 
         minimal_answer = MinimalAnswer(
             question_id=minimal_search.question_id,
-            question_str=minimal_search.question_str,
+            question=minimal_search.question,
             retrieved_sources=minimal_search.retrieved_sources,
             answer=answer_text
         )
