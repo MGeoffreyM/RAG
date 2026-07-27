@@ -255,18 +255,11 @@ class Retriever(BaseModel):
         for i, source in enumerate(sources):
             context += f"--- Source {i+1} ({source.file_path}) ---\n"
             context += f"{source.chunk_content}\n\n"
+        self._call_qwen_model()
+        answer_bot = dspy.Predict(AnswerBot)
+        answer = answer_bot(question=question, context=context)
 
-        prompt = f"""You are an expert technical development assistant.
-                     Your task is to answer the question based SOLELY on the
-                     provided context.
-                     If the context does not contain the information needed to
-                     answer the question, you must answer exactly: "I don't
-                     know based on the provided context." Don't make any
-                     assumptions.
-                     Context: {context}, Question: {question}, Answer:"""
-        response, thinking = self._call_qwen_model(prompt)
-        print(thinking)
-        return response
+        return answer.answer
 
     def answer_query(self, question: UnansweredQuestion,
                      k: int) -> StudentSearchResultsAndAnswer:
@@ -286,7 +279,7 @@ class Retriever(BaseModel):
 
         minimal_answer = MinimalAnswer(
             question_id=minimal_search.question_id,
-            question=minimal_search.question,
+            question_str=minimal_search.question_str,
             retrieved_sources=minimal_search.retrieved_sources,
             answer=answer_text
         )
