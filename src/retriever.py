@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 from tqdm import tqdm
 from pydantic import BaseModel
-from sentence_transformers import SentenceTransformer
 from chromadb.api.types import Metadata
 from src.tools import (MinimalSource,
                        UnansweredQuestion,
@@ -25,6 +24,7 @@ class Retriever(BaseModel):
     _llm_instance: Any = None
     _llm_embedding: Any = None
     batch_size: int = 5000
+    semantic: bool
 
     def _get_cache(self) -> dict[str, Any] | Any:
         """Charge le cache depuis le fichier."""
@@ -47,6 +47,7 @@ class Retriever(BaseModel):
 
     def _call_model_embedding(self) -> Any:
         if self._llm_embedding is None:
+            from sentence_transformers import SentenceTransformer
             self._llm_embedding = SentenceTransformer(
                 'sentence-transformers/all-MiniLM-L6-v2')
         return self._llm_embedding
@@ -57,7 +58,8 @@ class Retriever(BaseModel):
             self._llm_instance = AnswerLlm("Qwen/Qwen3-0.6B")
         return self._llm_instance.prompting(prompt)
 
-    def save_index(self, src: list[MinimalSource]) -> None:
+    def save_index(self,
+                   src: list[MinimalSource]) -> None:
         """Crée l'index BM25 avec l'Ancre Sémantique Totale."""
         prepared_data: list[dict[str, Any]] = []
         for i, elem in enumerate(src):
@@ -78,35 +80,41 @@ class Retriever(BaseModel):
         metadatas: list[Metadata] = [
             item["metadata"] for item in prepared_data]
 
-        # embedding
-        model = self._call_model_embedding()
-        corpus_embeddings = model.encode(bm25_contents)
-
         # bm25
         stemmer = Stemmer.Stemmer("english")
-        corpus_bm25 = bm25s.tokenize(bm25_contents, stopwords="en",
+        corpus_bm25 = bm25s.tokenize(bm25_contents,
+                                     stopwords="en",
                                      stemmer=stemmer)
-
         retriever = bm25s.BM25(k1=1.5, b=0.75)
         retriever.index(corpus_bm25)
 
         self.index_dir.mkdir(parents=True, exist_ok=True)
         retriever.save(str(self.index_dir))
 
-        chroma_client = chromadb.PersistentClient(
-            path=str(self.index_dir / "chroma_db"))
-        collection = chroma_client.get_or_create_collection(
-            name="mes_documents")
+        # embedding
+        if self.semantic:
+            model = self._call_model_embedding()
+            corpus_embeddings = model.encode(bm25_contents)
 
-        for i in tqdm(range(0, len(ids), self.batch_size),
-                      desc="recherche semantique"):
-            end_idx = i + self.batch_size
-            collection.add(
-                ids=ids[i:end_idx],
-                embeddings=corpus_embeddings[i:end_idx].tolist(),
-                documents=documents[i:end_idx],
-                metadatas=metadatas[i:end_idx]
-            )
+            chroma_client = chromadb.PersistentClient(
+                path=str(self.index_dir / "chroma_db"))
+
+            try:
+                chroma_client.delete_collection(name="mes_documents")
+            except ValueError:
+                pass
+
+            collection = chroma_client.create_collection(name="mes_documents")
+
+            for i in tqdm(range(0, len(ids), self.batch_size),
+                          desc="Recherche sémantique"):
+                end_idx = i + self.batch_size
+                collection.add(
+                    ids=ids[i:end_idx],
+                    embeddings=corpus_embeddings[i:end_idx].tolist(),
+                    documents=documents[i:end_idx],
+                    metadatas=metadatas[i:end_idx]
+                )
 
         self.chunks_file.parent.mkdir(parents=True, exist_ok=True)
         chunks_data = [chunk.model_dump() for chunk in src]
@@ -128,36 +136,60 @@ class Retriever(BaseModel):
         new_chunks_dict = [c.model_dump() for c in new_chunks]
         updated_chunks_dict = remaining_chunks + new_chunks_dict
 
-        chroma_client = chromadb.PersistentClient(
-            path=str(self.index_dir / "chroma_db"))
-        collection = chroma_client.get_or_create_collection(
-            name="mes_documents")
+        if self.semantic:
+            chroma_client = chromadb.PersistentClient(
+                path=str(self.index_dir / "chroma_db"))
+            collection = chroma_client.get_or_create_collection(
+                name="mes_documents")
 
-        for file_path in files_to_remove:
-            collection.delete(where={"file_path": file_path})
+            if collection.count() == 0 and remaining_chunks:
+                print("Index sémantique manquant. Rattrapage...")
+                model = self._call_model_embedding()
 
-        if new_chunks:
-            model = self._call_model_embedding()
-            new_bm25_contents = [
-                f"{c.file_path}\n{c.chunk_content}" for c in new_chunks]
+                old_bm25 = [f"{c['file_path']}\n{c['chunk_content']}"
+                            for c in remaining_chunks]
+                old_docs = [c['chunk_content'] for c in remaining_chunks]
+                old_metadatas = [{"file_path": c['file_path']}
+                                 for c in remaining_chunks]
+                old_ids = [str(uuid.uuid4()) for _ in remaining_chunks]
 
-            print("Calcul des embeddings...")
-            new_embeddings = model.encode(new_bm25_contents).tolist()
-            documents = [c.chunk_content for c in new_chunks]
-            metadatas: list[Metadata] = [
-                {"file_path": c.file_path} for c in new_chunks]
+                old_embeddings = model.encode(old_bm25).tolist()
 
-            new_ids = [str(uuid.uuid4()) for _ in new_chunks]
+                for i in tqdm(range(0, len(old_ids), self.batch_size),
+                              desc="Rattrapage ChromaDB"):
+                    end_idx = i + self.batch_size
+                    collection.add(
+                        ids=old_ids[i:end_idx],
+                        embeddings=old_embeddings[i:end_idx],
+                        documents=old_docs[i:end_idx],
+                        metadatas=old_metadatas[i:end_idx]
+                    )
 
-            for i in tqdm(range(0, len(new_ids), self.batch_size),
-                          desc="Mise à jour ChromaDB"):
-                end_idx = i + self.batch_size
-                collection.add(
-                    ids=new_ids[i:end_idx],
-                    embeddings=new_embeddings[i:end_idx],
-                    documents=documents[i:end_idx],
-                    metadatas=metadatas[i:end_idx]
-                )
+            for file_path in files_to_remove:
+                collection.delete(where={"file_path": file_path})
+
+            if new_chunks:
+                if 'model' not in locals():
+                    model = self._call_model_embedding()
+
+                new_bm25_contents = [f"{c.file_path}\n{c.chunk_content}"
+                                     for c in new_chunks]
+                print("Calcul des embeddings pour les nouveaux fichiers...")
+                new_embeddings = model.encode(new_bm25_contents).tolist()
+                documents = [c.chunk_content for c in new_chunks]
+                metadatas = [{"file_path": c.file_path} for c in new_chunks]
+
+                new_ids = [str(uuid.uuid4()) for _ in new_chunks]
+
+                for i in tqdm(range(0, len(new_ids), self.batch_size),
+                              desc="Mise à jour ChromaDB"):
+                    end_idx = i + self.batch_size
+                    collection.add(
+                        ids=new_ids[i:end_idx],
+                        embeddings=new_embeddings[i:end_idx],
+                        documents=documents[i:end_idx],
+                        metadatas=metadatas[i:end_idx]
+                    )
 
         with open(self.chunks_file, 'w', encoding='utf-8') as f:
             json.dump(updated_chunks_dict, f, indent=4)
@@ -165,6 +197,7 @@ class Retriever(BaseModel):
         if not updated_chunks_dict:
             print("Aucun document restant dans l'index.")
             return
+
         bm25_contents = [f"{c['file_path']}\n{c['chunk_content']}"
                          for c in updated_chunks_dict]
         stemmer = Stemmer.Stemmer("english")
@@ -182,50 +215,75 @@ class Retriever(BaseModel):
         if cache_key in cache_data["search"]:
             return StudentSearchResults(**cache_data["search"][cache_key])
 
-        model = self._call_model_embedding()
-        query_embedding = model.encode(query.question)
-
         stemmer = Stemmer.Stemmer("english")
         query_tokens = bm25s.tokenize(query.question,
                                       stopwords="en",
                                       stemmer=stemmer)
-
         retriever = bm25s.BM25.load(str(self.index_dir), load_corpus=False)
-
-        chroma_client = chromadb.PersistentClient(
-            path=str(self.index_dir / "chroma_db"))
-        collection = chroma_client.get_collection(name="mes_documents")
 
         with open(self.chunks_file, 'r', encoding='utf-8') as f:
             chunks_data = json.load(f)
 
         search_limit = max(k * 10, 1000)
-        bm25_results, bm25_scores = retriever.retrieve(query_tokens,
-                                                       k=search_limit)
+        bm25_results, _ = retriever.retrieve(query_tokens, k=search_limit)
 
-        chroma_results = collection.query(
-            query_embeddings=query_embedding.tolist(),
-            n_results=search_limit
-        )
+        if self.semantic:
+            chroma_client = chromadb.PersistentClient(
+                path=str(self.index_dir / "chroma_db"))
+            collection = chroma_client.get_or_create_collection(
+                name="mes_documents")
 
-        rrf_scores: dict[str, float] = {}
-        K = 10
+            if collection.count() == 0 and chunks_data:
+                model = self._call_model_embedding()
 
-        for rank, doc_index in enumerate(bm25_results[0]):
-            # On convertit simplement l'index BM25 en string
-            doc_id = str(doc_index)
-            rrf_scores[doc_id] = 0.60 * (1 / (K + rank + 1))
+                bm25_contents = [
+                    f"{c['file_path']}\n{c['chunk_content']}"
+                    for c in chunks_data]
+                documents = [c['chunk_content'] for c in chunks_data]
+                metadatas = [
+                    {"file_path": c['file_path']} for c in chunks_data]
+                ids = [str(i) for i in range(len(chunks_data))]
 
-        for rank, doc_id in enumerate(chroma_results['ids'][0]):
-            if doc_id in rrf_scores:
-                rrf_scores[doc_id] += 0.40 * (1 / (K + rank + 1))
+                corpus_embeddings = model.encode(bm25_contents)
+
+                for i in tqdm(range(0, len(ids), self.batch_size),
+                              desc="ChromaDB"):
+                    end_idx = i + self.batch_size
+                    collection.add(
+                        ids=ids[i:end_idx],
+                        embeddings=corpus_embeddings[i:end_idx].tolist(),
+                        documents=documents[i:end_idx],
+                        metadatas=metadatas[i:end_idx]
+                    )
             else:
-                rrf_scores[doc_id] = 0.40 * (1 / (K + rank + 1))
+                model = self._call_model_embedding()
 
-        sorted_ids = sorted(rrf_scores.keys(),
-                            key=lambda x: rrf_scores[x],
-                            reverse=True)
-        top_ids = sorted_ids[:k]
+            query_embedding = model.encode(query.question)
+            chroma_results = collection.query(
+                query_embeddings=query_embedding.tolist(),
+                n_results=search_limit
+            )
+
+            rrf_scores: dict[str, float] = {}
+            K = 10
+
+            for rank, doc_index in enumerate(bm25_results[0]):
+                doc_id = str(doc_index)
+                rrf_scores[doc_id] = 0.60 * (1 / (K + rank + 1))
+
+            for rank, doc_id in enumerate(chroma_results['ids'][0]):
+                if doc_id in rrf_scores:
+                    rrf_scores[doc_id] += 0.40 * (1 / (K + rank + 1))
+                else:
+                    rrf_scores[doc_id] = 0.40 * (1 / (K + rank + 1))
+
+            sorted_ids = sorted(rrf_scores.keys(),
+                                key=lambda x: rrf_scores[x],
+                                reverse=True)
+            top_ids = sorted_ids[:k]
+
+        else:
+            top_ids = [str(idx) for idx in bm25_results[0][:k]]
 
         retrieved_sources: list[MinimalSource] = []
 

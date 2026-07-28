@@ -91,12 +91,12 @@ class VisionLlm:
                     inputs.input_ids, generated_ids)
             ]
 
-            output_text: str = self.tokenizer.decode(
+            output_text: str | list[str] = self.tokenizer.decode(
                 generated_ids_trimmed[0],
                 skip_special_tokens=True,
                 clean_up_tokenization_spaces=False
             )
-            return output_text
+            return str(output_text)
 
         except Exception as e:
             return f"Erreur lors de l'analyse de l'image : {e}"

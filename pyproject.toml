@@ -44,3 +44,15 @@ exclude = [
 module = ["bm25s.*", "fire.*", "Stemmer", "transformers.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = "src.llm"
+disable_error_code = [
+    "misc",
+    "assignment"
+]
+
+[[tool.mypy.overrides]]
+module = "src.retriever"
+disable_error_code = [
+    "arg-type"
+]

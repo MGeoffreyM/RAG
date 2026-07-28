@@ -2,7 +2,7 @@ BLUE = \033[1;34m
 GREEN = \033[1;32m
 RESET = \033[0m
 
-.PHONY: install run debug clean lint lint-strict
+.PHONY: install run retrieval debug clean lint lint-strict
 
 install:
 	@printf '$(BLUE)Installation des dépendances avec uv...$(RESET)\n'
