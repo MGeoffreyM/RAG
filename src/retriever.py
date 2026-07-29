@@ -27,25 +27,62 @@ class Retriever(BaseModel):
     semantic: bool
 
     def _get_cache(self) -> dict[str, Any] | Any:
-        """Charge le cache depuis le fichier."""
+        """
+        Charge le cache depuis le fichier JSON défini par 'cache_file'.
+
+        Retourne un dictionnaire contenant les clés "search" et "answer" si le
+        fichier n'existe pas encore.
+
+        Returns:
+            dict[str, Any]: Le dictionnaire représentant l'état du cache.
+        """
         if self.cache_file.exists():
             with open(self.cache_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         return {"search": {}, "answer": {}}
 
     def _save_cache(self, cache_data: dict[str, Any]) -> None:
-        """Sauvegarde le cache sur le fichier."""
+        """
+        Sauvegarde les données du cache dans le fichier JSON.
+
+        Cette méthode s'assure également de créer les répertoires parents.
+
+        Args:
+            cache_data (dict[str, Any]): Le dictionnaire de données à
+                                         sauvegarder dans le cache.
+
+        Returns:
+            None
+        """
         self.cache_file.parent.mkdir(parents=True, exist_ok=True)
         with open(self.cache_file, 'w', encoding='utf-8') as f:
             json.dump(cache_data, f, indent=2)
 
     def _generate_cache_key(self, question: str, k: int) -> str:
-        """Crée un UUID unique et déterministe basé sur la question et k."""
+        """
+        Génère un UUID unique et déterministe (UUID5) basé sur la chaîne de la
+        question et la valeur de 'k'.
+
+        Args:
+            question (str): La question de l'utilisateur.
+            k (int): Le nombre de résultats demandés.
+
+        Returns:
+            str: L'UUID généré sous forme de chaîne de caractères pour servir
+                 de clé de cache.
+        """
         payload = f"{question}_{k}"
         cache_uuid = uuid.uuid5(self.namespace, payload)
         return str(cache_uuid)
 
     def _call_model_embedding(self) -> Any:
+        """
+        Charge et retourne de manière paresseuse le modèle d'embedding
+        'all-MiniLM-L6-v2' via 'SentenceTransformer'.
+
+        Returns:
+            Any: L'instance du modèle d'embedding chargée en mémoire.
+        """
         if self._llm_embedding is None:
             from sentence_transformers import SentenceTransformer
             self._llm_embedding = SentenceTransformer(
@@ -53,6 +90,17 @@ class Retriever(BaseModel):
         return self._llm_embedding
 
     def _call_qwen_model(self, prompt: str) -> Any:
+        """
+        Charge de manière paresseuse le modèle LLM 'Qwen/Qwen3-0.6B' via la
+        classe 'AnswerLlm' et le sollicite avec un prompt.
+
+        Args:
+            prompt (str): Le texte d'entrée complet (contexte et question)
+            à soumettre au modèle.
+
+        Returns:
+            Any: La réponse générée par le modèle de langage.
+        """
         if self._llm_instance is None:
             from src.llm import AnswerLlm
             self._llm_instance = AnswerLlm("Qwen/Qwen3-0.6B")
@@ -60,7 +108,21 @@ class Retriever(BaseModel):
 
     def save_index(self,
                    src: list[MinimalSource]) -> None:
-        """Crée l'index BM25 avec l'Ancre Sémantique Totale."""
+        """
+        Crée et sauvegarde l'index BM25 ainsi que l'index sémantique ChromaDB
+        (si la sémantique est activée) à partir d'une liste de sources.
+
+        La méthode formate les chemins en mots-clés, génère le corpus BM25,
+        encode les embeddings et sauvegarde également les données des chunks
+        dans 'chunks_file'.
+
+        Args:
+            src (list[MinimalSource]): La liste des fragments de documents
+            (chunks) à indexer.
+
+        Returns:
+            None
+        """
         prepared_data: list[dict[str, Any]] = []
         for i, elem in enumerate(src):
             path_keywords = elem.file_path.replace(
@@ -124,7 +186,23 @@ class Retriever(BaseModel):
     def update_index(self,
                      new_chunks: list[MinimalSource],
                      files_to_remove: list[str]) -> None:
-        """Met à jour l'index des fichiers modifiés (ChromaDB + BM25)."""
+        """
+        Met à jour les index existants (ChromaDB et BM25) en ajoutant les
+        nouveaux chunks et en supprimant ceux des fichiers obsolètes.
+
+        Si l'index sémantique est manquant mais que des chunks existent,
+        la méthode effectue un rattrapage en ré-encodant les anciens documents.
+
+        Args:
+            new_chunks (list[MinimalSource]): Liste des nouveaux fragments de
+                                              documents à ajouter à l'index.
+            files_to_remove (list[str]): Liste des chemins de fichiers dont
+                                         les fragments doivent être supprimés
+                                         de l'index.
+
+        Returns:
+            None
+        """
 
         all_chunks_dict = []
         if self.chunks_file.exists():
@@ -210,6 +288,24 @@ class Retriever(BaseModel):
 
     def search_query(self, query: UnansweredQuestion,
                      k: int) -> StudentSearchResults:
+        """
+        Effectue une recherche de documents pertinents pour une requête donnée
+        en utilisant un système de cache.
+
+        Si la recherche sémantique est activée, cette méthode effectue une
+        recherche hybride (BM25 et ChromaDB) et utilise l'algorithme RRF
+        (Reciprocal Rank Fusion) pour fusionner et classer les scores.
+        Sinon, elle se base uniquement sur BM25.
+
+        Args:
+            query (UnansweredQuestion): L'objet contenant la question de
+                                        l'utilisateur et son identifiant.
+            k (int): Le nombre maximum de documents sources à retourner.
+
+        Returns:
+            StudentSearchResults: Les résultats de la recherche structurés
+                                  contenant les sources récupérées.
+        """
         cache_data = self._get_cache()
         cache_key = self._generate_cache_key(query.question, k)
         if cache_key in cache_data["search"]:
@@ -308,7 +404,21 @@ class Retriever(BaseModel):
 
     def generate_answer(self, question: str,
                         sources: list[MinimalSource]) -> Any:
-        """Génère une réponse textuelle à partir de sources déjà trouvées."""
+        """
+        Construit un prompt combinant la question et le contexte des sources
+        fournies, puis génère une réponse textuelle stricte.
+
+        Le prompt instruit le modèle à répondre uniquement à partir du
+        contexte ou à répondre "I don't know." si l'information est absente.
+
+        Args:
+            question (str): La question posée par l'utilisateur[cite: 5].
+            sources (list[MinimalSource]): La liste des sources extraites
+                                           devant servir de contexte exclusif.
+
+        Returns:
+            Any: La réponse textuelle générée par le modèle.
+        """
         context = ""
         for i, source in enumerate(sources):
             context += f"--- Source {i+1} ({source.file_path}) ---\n"
@@ -329,7 +439,25 @@ If the context does not contain the answer, reply exactly: "I don't know."
 
     def answer_query(self, question: UnansweredQuestion,
                      k: int) -> StudentSearchResultsAndAnswer:
-        """Pour la commande 'answer' (1 seule question) : Cherche ET répond."""
+        """
+        Recherche des documents pertinents pour une question, puis génère une
+        réponse textuelle basée sur ces résultats.
+
+        Cette méthode gère la vérification et la sauvegarde dans le cache pour
+        éviter de régénérer une réponse pour une requête identique
+        (même question et même k).
+
+        Args:
+            question (UnansweredQuestion): L'objet encapsulant la question de
+                                           l'utilisateur à traiter.
+            k (int): Le nombre de sources à extraire pour alimenter la
+                     génération de la réponse.
+
+        Returns:
+            StudentSearchResultsAndAnswer: Un objet consolidé contenant les
+                                           sources récupérées et la réponse
+                                           textuelle finale.
+        """
         cache_data = self._get_cache()
         cache_key = self._generate_cache_key(question.question, k)
 

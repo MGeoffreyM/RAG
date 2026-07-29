@@ -18,6 +18,12 @@ from src.tools import (UnansweredQuestion,
 class RagCLI:
     """ Interface en ligne de commande"""
     def __init__(self, semantic: bool = False) -> None:
+        """
+        Initialise les chemins d'index et de chunks, ainsi que le Retriever.
+
+        Args:
+            semantic (bool): Active la recherche sémantique (défaut: False).
+        """
         self.index_path = Path("data/processed/bm25_index")
         self.chunks_path = Path("data/processed/chunks/chunks.json")
         self.rt = Retriever(index_dir=self.index_path,
@@ -33,11 +39,18 @@ class RagCLI:
         """
         Indexe la base de données et crée les chunks.
 
+        Cette méthode vérifie l'état précédent de l'index et ne traite que les
+        fichiers nouveaux ou modifiés, sauf si l'argument `force` est utilisé.
+
         Args:
-            data_path: chemin de la base de donnée (default: vllm-0.10.1),
-            max_chunk_size: La taille maximale d'un chunk (défaut: 2000),
-            image: permet le décriptage des images (défault: False),
-            force: permet de forcer la réindexation (défault: False).
+            data_path (Path): Chemin du répertoire de la base de données
+                              (défaut: 'data/raw/vllm-0.10.1/').
+            max_chunk_size (int): La taille maximale autorisée pour un chunk
+                                  (défaut: 2000).
+            image (bool): Permet le décryptage et l'analyse des images si True
+                          (défaut: False).
+            force (bool): Force la réindexation complète de tous les fichiers
+                          (défaut: False).
         """
         state_file = Path("data/processed/index_state.json")
         old_state = {}
@@ -65,10 +78,9 @@ class RagCLI:
                 [str(f).replace("\\", "/") for f in new_files] + deleted_files)
 
             chroma_db_dir = self.rt.index_dir / "chroma_db"
-            needs_semantic_catchup = self.rt.semantic and not chroma_db_dir.exists()
+            semantic_catchup = self.rt.semantic and not chroma_db_dir.exists()
 
-            # Si on a pas de fichiers à enlever ET qu'on ne force pas ET qu'on n'a pas besoin de rattrapage
-            if not files_to_remove and not force and not needs_semantic_catchup:
+            if not files_to_remove and not force and not semantic_catchup:
                 print("Aucun fichier n'a été modifié. "
                       "L'index est déjà à jour.")
                 return
@@ -99,6 +111,16 @@ class RagCLI:
                query: Annotated[str, StringConstraints(min_length=1,
                                                        strip_whitespace=True)],
                k: Annotated[int, Field(gt=0)] = 10) -> None:
+        """
+        Effectue une recherche d'information à partir d'une requête et affiche
+        les résultats au format JSON.
+
+        Args:
+            query (str): La requête de recherche, qui doit comporter au moins
+                         1 caractère et être sans espaces superflus.
+            k (int): Le nombre maximum de résultats à retourner,
+                     doit être strictement supérieur à 0 (défaut: 10).
+        """
         try:
             question = UnansweredQuestion(question=query)
             result = self.rt.search_query(question, k)
@@ -112,7 +134,22 @@ class RagCLI:
                        save_directory: str | Path = (
                            'data/output/search_results/'),
                        k: Annotated[int, Field(gt=0)] = 10) -> None:
+        """
+        Parcourt un dataset de questions et effectue une recherche pour
+        chacune d'elles.
 
+        Les résultats obtenus pour l'ensemble des questions sont ensuite
+        sauvegardés dans un fichier JSON.
+
+        Args:
+            dataset_path (str | Path): Le chemin vers le fichier JSON
+                                       contenant le dataset de questions.
+            save_directory (str | Path): Le répertoire de destination pour
+                                    sauvegarder les résultats
+                                    (défaut: 'data/output/search_results/').
+            k (int): Le nombre de sources à récupérer pour chaque question,
+                     doit être strictement supérieur à 0 (défaut: 10).
+        """
         dataset_path = Path(dataset_path)
         save_directory = Path(save_directory)
 
@@ -151,6 +188,19 @@ class RagCLI:
                query: Annotated[str, StringConstraints(min_length=1,
                                                        strip_whitespace=True)],
                k: Annotated[int, Field(gt=0)] = 10) -> None:
+        """
+        Recherche des sources pertinentes pour une question,
+        puis génère et sauvegarde une réponse.
+
+        La réponse générée est affichée dans la console et sauvegardée
+        localement dans 'data/processed/answer.json'.
+
+        Args:
+            query (str): La question posée, qui doit comporter au moins
+                         1 caractère (sans espaces superflus).
+            k (int): Le nombre de sources à utiliser pour formuler la réponse
+                     (défaut: 10).
+        """
         try:
             question = UnansweredQuestion(question=query)
             result = self.rt.answer_query(question, k)
@@ -168,7 +218,22 @@ class RagCLI:
                            'data/output/search_results_and_answer/'
                        ),
                        k: Annotated[int, Field(gt=0)] = 10) -> None:
+        """
+        Génère des réponses en lot pour un ensemble de résultats de recherche
+        existants issus d'un dataset.
 
+        Chaque réponse est générée à partir des sources récupérées,
+        puis l'ensemble est sauvegardé au format JSON.
+
+        Args:
+            student_search_results_path (str | Path): Le chemin vers le
+                fichier contenant les résultats de recherche.
+            save_directory (str | Path): Le dossier où sauvegarder le fichier
+                final contenant les réponses
+                (défaut: 'data/output/search_results_and_answer/').
+            k (int): Le nombre de sources considérées, doit être strictement
+                supérieur à 0 (défaut: 10).
+        """
         student_search_results_path = Path(student_search_results_path)
         save_directory = Path(save_directory)
 
@@ -215,7 +280,18 @@ class RagCLI:
                  student_search_results_path: str | Path,
                  dataset_path: str | Path,
                  k: Annotated[int, Field(gt=0)] = 10) -> None:
-        """Évalue les résultats de recherche contre le Ground Truth."""
+        """
+        Évalue les résultats de recherche de l'étudiant en les comparant avec
+        le Ground Truth d'un dataset de référence.
+
+        Args:
+            student_search_results_path (str | Path): Le chemin vers le
+                fichier contenant les résultats de recherche à évaluer.
+            dataset_path (str | Path): Le chemin vers le fichier du dataset
+                contenant les questions et réponses de référence.
+            k (int): Le nombre maximum de résultats pris en compte pour
+                calculer les métriques d'évaluation (défaut: 10).
+        """
 
         ev = Evaluator(
             student_search_results_path=Path(student_search_results_path),
@@ -224,7 +300,13 @@ class RagCLI:
         ev.run_evaluation(k=k)
 
     def serve(self, port: int = 8000) -> None:
-        """Lance l'API HTTP locale."""
+        """
+        Lance l'API HTTP locale en utilisant Uvicorn.
+
+        Args:
+            port (int): Le numéro de port sur lequel exécuter le serveur
+                        (défaut: 8000).
+        """
         import uvicorn
         print(f"Lancement du serveur sur http://localhost:{port}")
         uvicorn.run("src.api:app", host="127.0.0.1", port=port, reload=False)

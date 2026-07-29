@@ -6,7 +6,6 @@ RESET = \033[0m
 
 install:
 	@printf '$(BLUE)Installation des dépendances avec uv...$(RESET)\n'
-
 	uv sync
 
 run:
@@ -37,7 +36,7 @@ retrieval:
 
 debug:
 	@printf '$(BLUE)Lancement en mode debug de RAG...$(RESET)\n'
-	uv run python -m pdb src
+	uv run python -m pdb -m src
 
 clean:
 	@printf '$(BLUE)Nettoyage des fichiers...$(RESET)\n'

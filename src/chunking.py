@@ -21,6 +21,20 @@ class Chunker(BaseModel):
 
     @model_validator(mode='after')
     def find_suffix(self) -> 'Chunker':
+        """
+        Valide et trie les fichiers trouvés après l'initialisation du modèle.
+
+        Cette méthode parcourt les fichiers définis dans 'new_files' ou,
+        par défaut, tous les fichiers du répertoire 'data_base'.
+        Elle utilise 'magic' pour déterminer le type MIME de chaque fichier.
+        Elle ignore les extensions binaires spécifiques et peuple 'list_txt'
+        avec les extensions de fichiers textuels et 'list_img' avec les
+        chemins des images valides.
+
+        Returns:
+            Chunker: L'instance de la classe mise à jour avec les listes
+            d'extensions et d'images remplies.
+        """
         txt = ['.json', '.yaml', '.yml', '.toml', '.xml', '.sh', '.bash',
                '.md', '.txt']
         bin_extensions = ['.pyc', '.so', '.pyd', '.db', '.sqlite', '.a']
@@ -50,6 +64,19 @@ class Chunker(BaseModel):
         return self
 
     def process_text(self) -> None:
+        """
+        Charge et analyse les fichiers textuels identifiés.
+
+        Si des fichiers sont spécifiés dans 'new_files', la méthode utilise
+        'TextLoader' pour charger individuellement ceux qui ont une extension
+        valide.
+        Sinon, elle utilise 'GenericLoader' pour charger de manière globale
+        tous les fichiers correspondants depuis le répertoire 'data_base'.
+        Les documents extraits sont ensuite ajoutés à l'attribut 'list_doc'.
+
+        Returns:
+            None
+        """
         if not self.list_txt:
             print("Aucun fichier texte détecté.")
             return
@@ -77,6 +104,18 @@ class Chunker(BaseModel):
                 print(f"Erreur lors du parsing des fichiers : {e}")
 
     def process_images(self) -> None:
+        """
+        Analyse les images identifiées et génère des descriptions textuelles.
+
+        Cette méthode itère sur les chemins d'images stockés dans 'list_img'.
+        Elle utilise 'VisionLlm' pour obtenir une description textuelle de
+        chaque image.
+        Elle crée ensuite un objet 'Document' contenant cette description et
+        des métadonnées (source, type, format), qu'elle ajoute à 'list_doc'.
+
+        Returns:
+            None
+        """
         llm_vision = VisionLlm()
         docs_images = []
 
@@ -95,6 +134,25 @@ class Chunker(BaseModel):
         self.list_doc.extend(docs_images)
 
     def create_smart_chunks(self, chunk_size: int) -> None:
+        """
+        Découpe les documents chargés en segments (chunks) adaptés à leur
+        format.
+
+        La méthode calcule d'abord un chevauchement ('chunk_overlap')
+        correspondant à 25% de la taille du chunk.
+        Elle sélectionne ensuite le 'RecursiveCharacterTextSplitter' approprié
+        en fonction de l'extension du fichier, avec des règles spécifiques
+        pour Python, C++, Markdown et JavaScript.
+        Les segments générés sont convertis en objets 'MinimalSource'
+        (contenant le chemin, l'index de départ, l'index de fin et le contenu)
+        et ajoutés à 'list_chunk'.
+
+        Args:
+            chunk_size (int): La taille maximale en caractères d'un chunk.
+
+        Returns:
+            None
+        """
         chunk_overlap = int(chunk_size * 0.25)
 
         splitters = {
